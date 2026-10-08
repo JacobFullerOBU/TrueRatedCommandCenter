@@ -37,7 +37,7 @@ const GROWTH_PLAN = [
   ['Activation', 'Medium', 'Promote the Letterboxd import on the homepage - it brings people with existing review history'],
   ['Activation', 'Medium', 'Email/notify users when someone follows them or likes their review'],
   ['Social', 'High', 'Post a "True Rated vs critic score" comparison on TikTok/Reels 3x per week'],
-  ['Social', 'High', 'Use Surprise Me in short videos: "let the site pick tonight's movie"'],
+  ['Social', 'High', `Use Surprise Me in short videos: "let the site pick tonight's movie"`],
   ['Social', 'Medium', 'Start a weekly "Hot take Friday" poll on X/Instagram stories linking to a title page'],
   ['Social', 'Medium', 'Share a weekly Top Reviewers leaderboard post to reward and recruit reviewers'],
   ['Communities', 'High', 'Post genuinely useful lists (not ads) in 5 relevant subreddits: r/movies, r/television, r/gaming, r/books, r/musicsuggestions'],
@@ -45,8 +45,8 @@ const GROWTH_PLAN = [
   ['Communities', 'Medium', 'Launch on Product Hunt, Indie Hackers and Hacker News "Show HN"'],
   ['Retention', 'Medium', 'Add a weekly digest: top reviews in the categories each user follows'],
   ['Retention', 'Medium', 'Add reviewer streaks/badges (first review, 10 reviews, 5 categories)'],
-  ['Retention', 'Low', 'Seed pages with your own quality reviews so every title page isn't empty'],
-  ['Measure', 'Medium', 'Every Sunday: use Live tab -> Log to Metrics, then pick next week's top 3 tasks'],
+  ['Retention', 'Low', "Seed pages with your own quality reviews so every title page isn't empty"],
+  ['Measure', 'Medium', "Every Sunday: use Live tab -> Log to Metrics, then pick next week's top 3 tasks"],
 ];
 
 // ---------- helpers ----------
