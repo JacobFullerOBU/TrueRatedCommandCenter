@@ -27,11 +27,13 @@ export async function init(firebaseConfig) {
       const rPerDay = Object.fromEntries(days.map(d => [d, 0])), uPerDay = { ...rPerDay };
 
       let total = 0, sum = 0, rated = 0, last7 = 0, last30 = 0;
-      const active7 = new Set(), byMedia = {}, byCat = {};
+      const active7 = new Set(), byMedia = {}, byCat = {}, mediaRatings = {}, quotes = {};
       for (const [mediaId, group] of Object.entries(reviews || {})) {
         for (const r of Object.values(group || {})) {
           total++;
-          const n = parseFloat(r.rating); if (!isNaN(n)) { sum += n; rated++; }
+          const n = parseFloat(r.rating); if (!isNaN(n)) { sum += n; rated++; (mediaRatings[mediaId] ||= []).push(n); }
+          const q = quote(r);
+          if (q && !isNaN(n)) (quotes[mediaId] ||= []).push({ text: q, rating: n, userId: r.userId || '', date: (r.timestamp || '').slice(0, 10) });
           byMedia[mediaId] = (byMedia[mediaId] || 0) + 1;
           const cat = mediaId.split('_')[0]; byCat[cat] = (byCat[cat] || 0) + 1;
           const t = Date.parse(r.timestamp); if (isNaN(t)) continue;
@@ -53,8 +55,43 @@ export async function init(firebaseConfig) {
         avgRating: rated ? sum / rated : null,
         reviewsPerDay: days.map(d => ({ date: d, value: rPerDay[d] })),
         signupsPerDay: days.map(d => ({ date: d, value: uPerDay[d] })),
+        postPicks: postPicks(byMedia, mediaRatings, quotes, reviewers || {}),
         topMedia: top(byMedia), categories: top(byCat), suggestions: sugg.slice(0, 15), suggestionCount: sugg.length,
       };
     },
   };
+}
+
+// ---------- post picks (feeds the "Make a post" generator) ----------
+const CATS = { movies: 'Movie', movie: 'Movie', tv: 'TV', tv_shows: 'TV', games: 'Game', books: 'Book', music: 'Music' };
+
+// Plain, spoiler-free review text that reads well on a post (skips one-word and essay-length reviews).
+function quote(r) {
+  if (r.spoilers) return '';
+  const raw = r.text || String(r.reviewText || '').replace(/<[^>]*>/g, ' ');
+  const t = raw.replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+  return t.length >= 25 && t.length <= 400 ? t : '';
+}
+
+export function titleFromId(mediaId) {
+  const cat = Object.keys(CATS).sort((a, b) => b.length - a.length).find(c => mediaId.startsWith(c + '_'));
+  const slug = cat ? mediaId.slice(cat.length + 1) : mediaId;
+  const title = slug.replace(/_+/g, ' ').trim().replace(/\b\w/g, c => c.toUpperCase());
+  return { title: title || mediaId, category: cat ? CATS[cat] : '' };
+}
+
+function postPicks(byMedia, mediaRatings, quotes, reviewers) {
+  const avg = a => a.reduce((s, x) => s + x, 0) / a.length;
+  return Object.entries(byMedia)
+    .filter(([id]) => mediaRatings[id]?.length && quotes[id]?.length)
+    .sort((a, b) => b[1] - a[1] || avg(mediaRatings[b[0]]) - avg(mediaRatings[a[0]]))
+    .slice(0, 10)
+    .map(([id, count]) => ({
+      id, count, ...titleFromId(id), avg: avg(mediaRatings[id]),
+      // Mid-length reviews first: long enough to say something, short enough to fit on the image.
+      reviews: quotes[id]
+        .sort((a, b) => Math.abs(a.text.length - 140) - Math.abs(b.text.length - 140))
+        .slice(0, 5)
+        .map(({ userId, ...q }) => ({ ...q, name: reviewers[userId]?.name || 'a True Rated reviewer' })),
+    }));
 }

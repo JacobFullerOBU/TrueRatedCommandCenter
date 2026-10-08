@@ -133,6 +133,39 @@ function igSync() {
   };
   set('Instagram followers', s.followers); set('IG engagement rate %', s.avgER);
 }
+// ---------- make a post ----------
+const maker = { open: false, mod: null, pick: 0, review: 0 };
+async function openMaker() {
+  maker.open = true;
+  if (!maker.mod) { try { maker.mod = await import('./post.js'); } catch (e) { live.error = 'Could not load the post maker: ' + e.message; } }
+  render();
+}
+function makerView(s) {
+  const picks = s.postPicks || [];
+  if (!picks.length) return `<div class="card wide" style="margin-bottom:16px"><h2>Make a post</h2>
+    <div class="empty">No title has a spoiler-free review of a postable length yet. Try again after a few more reviews come in.</div>
+    <button class="link" data-act="closeMaker">Close</button></div>`;
+  if (!maker.mod) return '<div class="card wide empty">Loading post maker…</div>';
+  const p = picks[maker.pick] || picks[0], r = p.reviews[maker.review] || p.reviews[0];
+  const t = maker.mod.bestTime(ig.stats);
+  return `<div class="card wide" style="margin-bottom:16px"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Make a post</h2>
+      <button class="link" data-act="closeMaker">Close</button></div>
+    <div class="maker">
+      <canvas id="postCanvas" aria-label="Post preview"></canvas>
+      <div class="maker-side">
+        <label class="label">Title<select data-change="makerPick">${picks.map((x, i) =>
+          `<option value="${i}" ${i === maker.pick ? 'selected' : ''}>${esc(x.title)} · ${x.avg.toFixed(1)}/10 · ${x.count} review${x.count === 1 ? "" : "s"}</option>`).join('')}</select></label>
+        <label class="label">Review<select data-change="makerReview">${p.reviews.map((x, i) =>
+          `<option value="${i}" ${i === maker.review ? 'selected' : ''}>${esc(x.name)} · ${x.rating}/10 · ${esc(x.text.slice(0, 50))}…</option>`).join('')}</select></label>
+        <label class="label">Caption<textarea id="postCaption" rows="9">${esc(maker.mod.caption(p, r))}</textarea></label>
+        <div class="card" style="padding:10px"><b>Best time to post: ${esc(t.label)}</b><div class="label">${esc(t.why)}</div></div>
+        <div class="row"><button class="primary" data-act="downloadPost">Download image</button>
+          <button data-act="copyCaption">Copy caption</button>
+          <button data-act="schedulePost">Add to calendar (${esc(maker.mod.nextSlot(t))})</button></div>
+      </div></div></div>`;
+}
+const caption = () => document.getElementById('postCaption')?.value || '';
+
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // ---------- views ----------
@@ -173,13 +206,14 @@ const views = {
     const bar = `<div class="row" style="margin-bottom:16px"><span class="pill ${live.isAdmin ? 'ok' : 'med'}">${esc(live.user.email)}${live.isAdmin ? ' · admin' : ' · not admin'}</span>
       <button class="primary" data-act="liveRefresh">${live.busy ? 'Loading…' : 'Refresh'}</button>
       <button data-act="liveSync" ${s ? '' : 'disabled'}>Log to Metrics</button>
+      <button data-act="makePost" ${s ? '' : 'disabled'}>Make a post</button>
       <button class="link" data-act="liveOut">Sign out</button>
       ${s ? `<span class="label">Updated ${new Date(s.fetchedAt).toLocaleTimeString()}</span>` : ''}</div>
       ${live.error ? `<p class="down">${esc(live.error)}</p>` : ''}`;
     if (!s) return head + bar + '<div class="empty">Press Refresh to load stats.</div>';
     const k = (l, v, sub) => `<div class="card kpi"><div class="label">${l}</div><div class="value">${v}</div><div class="label">${sub || '&nbsp;'}</div></div>`;
     const list = rows => rows.map(([n, c]) => `<tr><td>${esc(n)}</td><td>${c}</td></tr>`).join('');
-    return head + bar + `<div class="grid">
+    return head + bar + (maker.open ? makerView(s) : '') + `<div class="grid">
       ${k('Users', fmt(s.users), `+${s.newUsers7} this week · +${s.newUsers30} this month`)}
       ${k('Reviews', fmt(s.total), `+${s.last7} this week · +${s.last30} this month`)}
       ${k('Active reviewers (7d)', s.active7, 'distinct people who posted')}
@@ -360,7 +394,24 @@ const actions = {
   igDisconnect() { delete state.igConfig; delete state.igStats; ig.stats = null; },
   liveRefresh() { liveRefresh(); return false; },
   liveSync() { syncMetrics(); },
-  liveOut() { live.api.signOut(); live.stats = null; return false; },
+  liveOut() { live.api.signOut(); live.stats = null; maker.open = false; return false; },
+  makePost() { openMaker(); return false; },
+  closeMaker() { maker.open = false; },
+  downloadPost() {
+    const p = live.stats.postPicks[maker.pick], slug = p.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const a = document.createElement('a');
+    a.href = document.getElementById('postCanvas').toDataURL('image/png');
+    a.download = `truerated-${slug}-${today()}.png`; a.click(); return false;
+  },
+  copyCaption(d, b) {
+    navigator.clipboard.writeText(caption()).then(() => { b.textContent = 'Copied ✓'; }, () => alert('Copy failed. Select the caption and copy it manually.'));
+    return false;
+  },
+  schedulePost() {
+    const t = maker.mod.bestTime(ig.stats);
+    state.posts.push({ id: uid(), platform: 'Instagram', date: maker.mod.nextSlot(t), text: `[${t.label}] ${caption()}`, status: 'Planned' });
+    save(); location.hash = 'Content'; return false;
+  },
   clearChecks() { state.checks = []; },
   export() {
     const a = document.createElement('a');
@@ -406,10 +457,18 @@ function render() {
   document.getElementById('nav').innerHTML = VIEWS.map(n => `<a href="#${n}" class="${n === v ? 'active' : ''}">${n}</a>`).join('');
   document.getElementById('view').innerHTML = views[v]();
   if (v === 'Live') liveInit();
+  const cv = document.getElementById('postCanvas');
+  if (cv && maker.mod) { const p = live.stats.postPicks[maker.pick]; maker.mod.drawPost(cv, p, p.reviews[maker.review] || p.reviews[0]); }
 }
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
-  if (actions[b.dataset.act](b.dataset) !== false) { save(); render(); }
+  if (actions[b.dataset.act](b.dataset, b) !== false) { save(); render(); }
+});
+document.addEventListener('change', e => {
+  const c = e.target.dataset.change; if (!c) return;
+  if (c === 'makerPick') { maker.pick = +e.target.value; maker.review = 0; }
+  if (c === 'makerReview') maker.review = +e.target.value;
+  render();
 });
 document.addEventListener('submit', e => {
   const f = e.target; if (!f.dataset.form) return;

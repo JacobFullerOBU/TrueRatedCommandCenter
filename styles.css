@@ -51,3 +51,9 @@ th{color:var(--muted);font-weight:500;font-size:13px}
   #nav{flex-direction:row;flex-wrap:wrap}.site-link{margin:0}
   .board{grid-template-columns:1fr}main{padding:16px}
 }
+.maker{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-top:12px}
+.maker canvas{width:100%;aspect-ratio:1;border-radius:8px;border:1px solid var(--line)}
+.maker-side{display:flex;flex-direction:column;gap:10px}
+.maker-side label{display:flex;flex-direction:column;gap:4px}
+.maker-side textarea{resize:vertical;width:100%}
+@media (max-width:800px){.maker{grid-template-columns:1fr}}
