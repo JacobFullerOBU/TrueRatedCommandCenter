@@ -25,6 +25,30 @@ function load() {
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { } }
 
+// [category, priority, title] - starter plan tailored to a multi-category review site
+const GROWTH_PLAN = [
+  ['Foundation', 'High', 'Add Google Search Console for truerated.co and submit sitemap.xml'],
+  ['Foundation', 'High', 'Add unique title + meta description + Open Graph image to every page (movie.html, reviewer-profile.html)'],
+  ['Foundation', 'High', 'Make sharing a review produce a rich link preview (title, rating, cover) for iMessage/X/Discord'],
+  ['Foundation', 'High', 'Add analytics (Plausible or GA4) and track: visits, signups, first review'],
+  ['Foundation', 'Medium', 'Keep sitemap.xml updated with all movie/TV/game/book pages (auto-generate in the GitHub workflow)'],
+  ['Activation', 'High', 'Add a "Review something in 30 seconds" prompt on the homepage for new visitors'],
+  ['Activation', 'High', 'Write a welcome flow: after signup, ask for 3 favorites and suggest 5 titles to rate'],
+  ['Activation', 'Medium', 'Promote the Letterboxd import on the homepage - it brings people with existing review history'],
+  ['Activation', 'Medium', 'Email/notify users when someone follows them or likes their review'],
+  ['Social', 'High', 'Post a "True Rated vs critic score" comparison on TikTok/Reels 3x per week'],
+  ['Social', 'High', 'Use Surprise Me in short videos: "let the site pick tonight's movie"'],
+  ['Social', 'Medium', 'Start a weekly "Hot take Friday" poll on X/Instagram stories linking to a title page'],
+  ['Social', 'Medium', 'Share a weekly Top Reviewers leaderboard post to reward and recruit reviewers'],
+  ['Communities', 'High', 'Post genuinely useful lists (not ads) in 5 relevant subreddits: r/movies, r/television, r/gaming, r/books, r/musicsuggestions'],
+  ['Communities', 'Medium', 'Reach out to 20 micro-creators (1k-20k followers) and offer a featured reviewer profile'],
+  ['Communities', 'Medium', 'Launch on Product Hunt, Indie Hackers and Hacker News "Show HN"'],
+  ['Retention', 'Medium', 'Add a weekly digest: top reviews in the categories each user follows'],
+  ['Retention', 'Medium', 'Add reviewer streaks/badges (first review, 10 reviews, 5 categories)'],
+  ['Retention', 'Low', 'Seed pages with your own quality reviews so every title page isn't empty'],
+  ['Measure', 'Medium', 'Every Sunday: use Live tab -> Log to Metrics, then pick next week's top 3 tasks'],
+];
+
 // ---------- helpers ----------
 const latest = m => m.entries.length ? m.entries[m.entries.length - 1].value : null;
 function delta(m) {
@@ -165,10 +189,11 @@ const views = {
     <div class="card wide" style="margin-bottom:16px"><form data-form="task" class="row">
       <input name="title" placeholder="New task…" required style="flex:1;min-width:200px">
       <select name="priority"><option>High</option><option selected>Medium</option><option>Low</option></select>
-      <input name="due" type="date"><button class="primary">Add</button></form></div>
+      <input name="due" type="date"><button class="primary">Add</button>
+      <button type="button" data-act="loadPlan">Load growth plan</button></form></div>
     <div class="board">${cols.map(c => `<div class="col card"><h3>${c} (${state.tasks.filter(t => t.status === c).length})</h3>
       ${state.tasks.filter(t => t.status === c).map(t => `<div class="task">${esc(t.title)}
-        <div class="meta"><span class="pill ${t.priority === 'High' ? 'high' : t.priority === 'Medium' ? 'med' : ''}">${t.priority}</span>
+        <div class="meta">${t.cat ? esc(t.cat) + ' · ' : ''}<span class="pill ${t.priority === 'High' ? 'high' : t.priority === 'Medium' ? 'med' : ''}">${t.priority}</span>
         ${t.due ? ' due ' + esc(t.due) : ''}</div>
         <div class="row" style="margin-top:6px">
           ${c !== 'To do' ? `<button class="link" data-act="mvTask" data-id="${t.id}" data-to="${cols[cols.indexOf(c) - 1]}">←</button>` : ''}
@@ -252,6 +277,11 @@ const actions = {
   },
   delMetric(d) { if (confirm('Delete this metric and its history?')) state.metrics = state.metrics.filter(m => m.id !== d.id); },
   mvTask(d) { state.tasks.find(t => t.id === d.id).status = d.to; },
+  loadPlan() {
+    const have = new Set(state.tasks.map(t => t.title));
+    GROWTH_PLAN.filter(p => !have.has(p[2])).forEach(([cat, priority, title]) =>
+      state.tasks.push({ id: uid(), title, priority, cat, due: '', status: 'To do' }));
+  },
   delTask(d) { state.tasks = state.tasks.filter(t => t.id !== d.id); },
   posted(d) { state.posts.find(p => p.id === d.id).status = 'Posted'; },
   delPost(d) { state.posts = state.posts.filter(p => p.id !== d.id); },
