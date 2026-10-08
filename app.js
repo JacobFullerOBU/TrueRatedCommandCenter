@@ -1,7 +1,7 @@
 'use strict';
 const SITE = 'https://truerated.co';
 const KEY = 'trueRatedCommandCenter.v1';
-const VIEWS = ['Overview', 'Live', 'Metrics', 'Tasks', 'Content', 'Moderation', 'Uptime', 'Data'];
+const VIEWS = ['Overview', 'Live', 'Metrics', 'Tasks', 'Content', 'Instagram', 'Moderation', 'Uptime', 'Data'];
 const PLATFORMS = ['Instagram', 'TikTok', 'X', 'YouTube', 'Facebook', 'Reddit', 'Email'];
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -14,7 +14,7 @@ function defaults() {
   return {
     metrics: [
       m('Total users', '', 1000), m('Reviews posted', '', 5000), m('Weekly active users', '', 300),
-      m('Instagram followers', '', 2000), m('TikTok followers', '', 2000), m('Avg. rating', '★', 4.5),
+      m('Instagram followers', '', 2000), m('TikTok followers', '', 2000), m('Avg. rating', '★', 4.5), m('IG engagement rate %', '', 5),
     ],
     tasks: [], posts: [], reports: [], checks: [],
   };
@@ -112,6 +112,29 @@ const bars = rows => {
     `<rect x="${i * 8 + 1}" y="${56 - r.value / max * 52}" width="6" height="${r.value / max * 52 || .5}" fill="var(--accent)"><title>${r.date}: ${r.value}</title></rect>`).join('')}</svg>`;
 };
 
+// ---------- instagram ----------
+const ig = { stats: state.igStats || null, busy: false, error: '' };
+async function igRefresh() {
+  const c = state.igConfig; if (!c?.token || !c?.userId) return;
+  ig.busy = true; ig.error = ''; render();
+  try {
+    const { fetchInstagram } = await import('./ig.js');
+    ig.stats = await fetchInstagram(c); state.igStats = ig.stats; save();
+  } catch (e) { ig.error = e.message; }
+  ig.busy = false; render();
+}
+function igSync() {
+  const s = ig.stats; if (!s) return;
+  const set = (name, v) => {
+    let m = state.metrics.find(x => x.name === name);
+    if (!m) state.metrics.push(m = { id: uid(), name, unit: '', goal: 0, entries: [] });
+    m.entries = m.entries.filter(e => e.date !== today());
+    m.entries.push({ date: today(), value: +v.toFixed(2) });
+  };
+  set('Instagram followers', s.followers); set('IG engagement rate %', s.avgER);
+}
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 // ---------- views ----------
 const views = {
   Overview() {
@@ -168,6 +191,50 @@ const views = {
       <div class="card"><h2>By category</h2><table>${list(s.categories)}</table></div>
       <div class="card"><h2>Most reviewed</h2><table>${list(s.topMedia)}</table></div>
       <div class="card wide"><h2>Latest suggestions</h2>${s.suggestions.map(x => `<div style="padding:4px 0;border-bottom:1px solid var(--line)">${esc(x.text)} <span class="label">${esc((x.timestamp || '').slice(0, 10))}</span></div>`).join('') || '<div class="empty">None</div>'}</div></div>`;
+  },
+
+  Instagram() {
+    const head = `<h1>Instagram <a href="https://instagram.com/truerated_" target="_blank" rel="noopener" style="font-size:15px">@truerated_ ↗</a></h1>
+      <p class="sub">Followers, engagement and what's working, via Instagram's official API.</p>`;
+    const c = state.igConfig;
+    const setup = `<div class="card wide" style="margin-bottom:16px"><h2>${c?.token ? 'Connection' : 'Connect Instagram'}</h2>
+      <form data-form="igConfig" class="row">
+        <input name="userId" placeholder="Instagram Business Account ID" value="${esc(c?.userId || '')}" required>
+        <input name="token" type="password" placeholder="Access token" value="${esc(c?.token || '')}" required style="flex:1;min-width:200px">
+        <button class="primary">Save</button>${c?.token ? '<button type="button" class="link" data-act="igDisconnect">Disconnect</button>' : ''}</form>
+      <details style="margin-top:10px"><summary class="label" style="cursor:pointer">How do I get these? (one-time, ~15 min)</summary>
+      <ol class="label" style="line-height:1.7">
+        <li>In the Instagram app: Settings → Account type → switch to <b>Professional</b> (Creator or Business).</li>
+        <li>Create a Facebook Page and link it to @truerated_ (Instagram → Edit profile → Page).</li>
+        <li>Go to developers.facebook.com → Create App (type: Business). Add the <b>Instagram Graph API</b> product.</li>
+        <li>Open the Graph API Explorer, pick your app, add permissions <code>instagram_basic</code>, <code>instagram_manage_insights</code>, <code>pages_show_list</code>, <code>pages_read_engagement</code>, and generate a user token.</li>
+        <li>Request <code>me/accounts?fields=instagram_business_account</code> in the Explorer: the <code>instagram_business_account.id</code> is your Account ID.</li>
+        <li>Exchange the token for a long-lived one (60 days) with the Access Token Debugger's "Extend Access Token" and paste it above. Repeat every ~60 days.</li></ol>
+      <p class="label">The token is stored only in this browser. Treat it like a password.</p></details></div>`;
+    const manual = `<p class="label">No API access yet? Log followers by hand on the <a href="#Metrics">Metrics</a> tab (Instagram followers). It works the same.</p>`;
+    if (!c?.token) return head + setup + manual;
+    const s = ig.stats;
+    const bar = `<div class="row" style="margin-bottom:16px"><button class="primary" data-act="igRefresh">${ig.busy ? 'Loading…' : 'Refresh'}</button>
+      <button data-act="igSync" ${s ? '' : 'disabled'}>Log to Metrics</button>
+      ${s ? `<span class="label">Updated ${new Date(s.fetchedAt).toLocaleTimeString()}</span>` : ''}</div>
+      ${ig.error ? `<p class="down">${esc(ig.error)}</p>` : ''}`;
+    if (!s) return head + bar + '<div class="empty">Press Refresh to load.</div>' + setup;
+    const k = (l, v, sub) => `<div class="card kpi"><div class="label">${l}</div><div class="value">${v}</div><div class="label">${sub || '&nbsp;'}</div></div>`;
+    const best = s.byDay.map((v, i) => [DOW[i], v, s.dayCounts[i]]).filter(x => x[2]);
+    const maxD = Math.max(0.0001, ...best.map(x => x[1]));
+    const link = p => `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.caption || '(no caption)')}</a>`;
+    return head + bar + `<div class="grid">
+      ${k('Followers', fmt(s.followers), `following ${fmt(s.following)} · ${fmt(s.mediaCount)} posts`)}
+      ${k('Engagement rate', s.avgER.toFixed(2) + '%', 'avg per post, last 30d')}
+      ${k('Avg likes / comments', Math.round(s.avgLikes) + ' / ' + Math.round(s.avgComments), `${s.posts30} posts in 30d`)}
+      ${s.insights.reach != null ? k('Reach', fmt(s.insights.reach), s.insights.profile_views != null ? fmt(s.insights.profile_views) + ' profile views' : '') : ''}</div>
+    <div class="grid" style="margin-top:16px">
+      <div class="card"><h2>Engagement by weekday</h2>${best.map(([d, v, n]) =>
+        `<div class="row"><span style="width:36px">${d}</span><div class="bar" style="flex:1;margin:0"><i style="width:${v / maxD * 100}%"></i></div><span class="label">${v.toFixed(1)}% (${n})</span></div>`).join('')}</div>
+      <div class="card"><h2>By format</h2><table>${s.byType.map(([t, v, n]) => `<tr><td>${esc(t)}</td><td>${v.toFixed(2)}%</td><td class="label">${n} posts</td></tr>`).join('')}</table>
+        ${s.bestHours.length ? `<p class="label">Best hours: ${s.bestHours.map(h => h[0] + ':00').join(', ')}</p>` : ''}</div>
+      <div class="card wide"><h2>Top posts</h2><table>${s.top.map(p => `<tr><td>${link(p)}</td><td>${esc(p.type)}</td><td>♥ ${p.likes}</td><td>💬 ${p.comments}</td><td class="label">${esc(p.date)}</td></tr>`).join('')}</table></div>
+      <div class="card wide"><h2>Recent posts</h2><table><tr><th>Post</th><th>Likes</th><th>Comments</th><th>Eng. rate</th><th>Date</th></tr>${s.recent.map(p => `<tr><td>${link(p)}</td><td>${p.likes}</td><td>${p.comments}</td><td>${p.er.toFixed(2)}%</td><td class="label">${esc(p.date)}</td></tr>`).join('')}</table></div></div>` + setup;
   },
 
   Metrics() {
@@ -288,6 +355,9 @@ const actions = {
   resolve(d) { state.reports.find(r => r.id === d.id).status = 'Resolved'; },
   delReport(d) { state.reports = state.reports.filter(r => r.id !== d.id); },
   check() { checkSite(); return false; },
+  igRefresh() { igRefresh(); return false; },
+  igSync() { igSync(); },
+  igDisconnect() { delete state.igConfig; delete state.igStats; ig.stats = null; },
   liveRefresh() { liveRefresh(); return false; },
   liveSync() { syncMetrics(); },
   liveOut() { live.api.signOut(); live.stats = null; return false; },
@@ -319,6 +389,10 @@ const forms = {
     live.error = '';
     try { await live.api.signIn(f.email.value, f.pw.value); liveRefresh(); }
     catch (e) { live.error = 'Sign-in failed: ' + e.message; render(); }
+  },
+  igConfig(f) {
+    state.igConfig = { userId: f.userId.value.trim(), token: f.token.value.trim() };
+    save(); igRefresh(); return Promise.resolve();
   },
   task: f => state.tasks.push({ id: uid(), title: f.title.value, priority: f.priority.value, due: f.due.value, status: 'To do' }),
   post: f => state.posts.push({ id: uid(), platform: f.platform.value, date: f.date.value, text: f.text.value, status: 'Planned' }),
