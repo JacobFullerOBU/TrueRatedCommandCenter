@@ -40,6 +40,7 @@ const GROWTH_PLAN = [
   ['Social', 'High', `Use Surprise Me in short videos: "let the site pick tonight's movie"`],
   ['Social', 'Medium', 'Start a weekly "Hot take Friday" poll on X/Instagram stories linking to a title page'],
   ['Social', 'Medium', 'Share a weekly Top Reviewers leaderboard post to reward and recruit reviewers'],
+  ['Social', 'High', 'Star conversion: show 5 stars on Instagram graphics with a small "X/10" under them (each half star = 1 point, so 4 stars = 8/10, 3.5 = 7/10), and update the bio to explain it'],
   ['Communities', 'High', 'Post genuinely useful lists (not ads) in 5 relevant subreddits: r/movies, r/television, r/gaming, r/books, r/musicsuggestions'],
   ['Communities', 'Medium', 'Reach out to 20 micro-creators (1k-20k followers) and offer a featured reviewer profile'],
   ['Communities', 'Medium', 'Launch on Product Hunt, Indie Hackers and Hacker News "Show HN"'],
